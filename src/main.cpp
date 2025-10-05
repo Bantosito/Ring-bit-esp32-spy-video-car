@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncTCP.h>
+
 //#define SERVO_PIN 18       // GPIO pin connected to servo signal
 //#define SERVO_CH  0        // LEDC channel
 //#define SERVO_FREQ 50      // 50 Hz = 20ms period
@@ -54,10 +57,40 @@ class Servo {
    }
 };
 // Helper to convert microseconds to LEDC duty value
+//Creating servo class robocik
 Servo robocik;
-WiFiServer server(80);
+//
+AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
 
-String header;
+//String header;
+
+void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
+  AwsFrameInfo *info = (AwsFrameInfo*)arg;
+  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+    String msg = String((char*)data).substring(0, len);
+
+    if (msg == "FORWARD_START") {
+      robocik.go_straight();
+      Serial.println("GPIO 26 ON (button pressed)");
+    }
+    else if (msg == "FORWARD_STOP") {
+      robocik.stop();
+      Serial.println("GPIO 26 OFF (button released)");
+    }
+  }
+}
+
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
+             AwsEventType type, void *arg, uint8_t *data, size_t len) {
+  if (type == WS_EVT_CONNECT) {
+    Serial.println("WebSocket client connected");
+  } else if (type == WS_EVT_DISCONNECT) {
+    Serial.println("WebSocket client disconnected");
+  } else if (type == WS_EVT_DATA) {
+    handleWebSocketMessage(arg, data, len);
+  }
+}
 
 
 void setup() {
@@ -72,68 +105,51 @@ void setup() {
   //ledcSetup(SERVO_CH, SERVO_FREQ, SERVO_RES);
   //ledcAttachPin(SERVO_PIN, SERVO_CH);
   Serial.println(myIP);
+
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+button { font-size: 24px; padding: 20px; margin: 10px; }
+</style>
+</head>
+<body>
+<h2>ESP32 WebSocket Control</h2>
+<button id="forward">Hold Forward</button>
+
+<script>
+  var gateway = `ws://${window.location.hostname}/ws`;
+  var websocket;
+
+  window.addEventListener('load', onLoad);
+
+  function initWebSocket() {
+    websocket = new WebSocket(gateway);
+  }
+
+  function onLoad() {
+    initWebSocket();
+    const btn = document.getElementById("forward");
+    btn.addEventListener("mousedown", () => { websocket.send("FORWARD_START"); });
+    btn.addEventListener("mouseup",   () => { websocket.send("FORWARD_STOP"); });
+    btn.addEventListener("touchstart",() => { websocket.send("FORWARD_START"); });
+    btn.addEventListener("touchend",  () => { websocket.send("FORWARD_STOP"); });
+  }
+</script>
+</body>
+</html>
+)rawliteral");
+  });
+
   server.begin();
 }
 
 void loop() {
-  WiFiClient client = server.available();
-  if (client) {
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        Serial.write(c);  // echo to USB Serial
-      }
-      if (Serial.available()) {
-        char c = Serial.read();
-        client.write(c);  // send to client
-      }
-    }
-    client.stop();
-  }
+  ws.cleanupClients();  // keep WebSocket alive
 }
-   /*
-   if(client){
-    while (client.connected()){
-      if (client.available() > 0) {
-        
-        char cmd = Serial.read();   // read one character
-        if (cmd == 'w') {
-          
-          client.println("Forward!");
-          robocik.go_straight();
-          // trigger forward action
-        }
-        else if (cmd == 'd') { 
-          client.println("Right!");
-          robocik.turn_right();
-          // trigger reverse action
-        }
-        else if (cmd == 'a') {
-          //Serial.println("Right!");
-          robocik.turn_left();
-          // trigger reverse action
-        }
-        else if (cmd == 's') {
-          //Serial.println("Backwards!");
-          robocik.go_backwards();
-        
-      }
-      ticks = 0;
-      state=0;
-      }
-      else if (client.available() == 0 && state == 0 && ticks == 20000 ){
-          ticks = 0;
-          state=1;
-          //Serial.println("Stop!");
-          robocik.stop();
-      }
-      else if (client.available() == 0 ){      // trigger robot stop action   
-      //Serial.println("YOMAMA!");
-      ticks ++;
-      }
-
-    }
-    client.stop();
-}
-}
-*/
