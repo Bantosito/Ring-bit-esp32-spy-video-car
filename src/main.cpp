@@ -70,13 +70,25 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     String msg = String((char*)data).substring(0, len);
 
-    if (msg == "FORWARD_START") {
+    if (msg == "GO_FORWARD") {
       robocik.go_straight();
-      Serial.println("GPIO 26 ON (button pressed)");
+      //Serial.println(" Forward (button pressed)");
+    }
+    else if (msg == "TURN_RIGHT") {
+      robocik.turn_right();
+      //Serial.println("Right (button pressed)");
+    }
+    else if (msg == "TURN_LEFT") {
+      robocik.turn_left();
+      //Serial.println("Left(button pressed)");
+    }
+    else if (msg == "GO_BACKWARDS") {
+      robocik.go_backwards();
+      //Serial.println("Backwards (button pressed)");
     }
     else if (msg == "FORWARD_STOP") {
       robocik.stop();
-      Serial.println("GPIO 26 OFF (button released)");
+      //Serial.println("Stop (button released)");
     }
   }
 }
@@ -84,27 +96,26 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
              AwsEventType type, void *arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_CONNECT) {
-    Serial.println("WebSocket client connected");
+    //Serial.println("WebSocket client connected");
   } else if (type == WS_EVT_DISCONNECT) {
-    Serial.println("WebSocket client disconnected");
+    //Serial.println("WebSocket client disconnected");
   } else if (type == WS_EVT_DATA) {
     handleWebSocketMessage(arg, data, len);
   }
 }
 
-
 void setup() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP("dupajasiu","pierdzistasiu");
-  Serial.begin(9600);
+  //Serial.begin(9600);
   IPAddress myIP = WiFi.softAPIP();
   
   //Serial.println(maxDuty);
   robocik.setup_n_attach(25,26);
-  Serial.println("Enter command: w=forward, s=stop, r=reverse");
+  //Serial.println("Enter command: w=forward, s=stop, r=reverse");
   //ledcSetup(SERVO_CH, SERVO_FREQ, SERVO_RES);
   //ledcAttachPin(SERVO_PIN, SERVO_CH);
-  Serial.println(myIP);
+  //Serial.println(myIP);
 
   ws.onEvent(onEvent);
   server.addHandler(&ws);
@@ -121,7 +132,10 @@ button { font-size: 24px; padding: 20px; margin: 10px; }
 </head>
 <body>
 <h2>ESP32 WebSocket Control</h2>
-<button id="forward">Hold Forward</button>
+<button id="forward">Go Forward</button>
+<button id="right">Turn Right </button>
+<button id="left">Turn Left </button>
+<button id="reverse">Reverse </button>
 
 <script>
   var gateway = `ws://${window.location.hostname}/ws`;
@@ -135,11 +149,30 @@ button { font-size: 24px; padding: 20px; margin: 10px; }
 
   function onLoad() {
     initWebSocket();
-    const btn = document.getElementById("forward");
-    btn.addEventListener("mousedown", () => { websocket.send("FORWARD_START"); });
-    btn.addEventListener("mouseup",   () => { websocket.send("FORWARD_STOP"); });
-    btn.addEventListener("touchstart",() => { websocket.send("FORWARD_START"); });
-    btn.addEventListener("touchend",  () => { websocket.send("FORWARD_STOP"); });
+    const forward_btn = document.getElementById("forward");
+    forward_btn.addEventListener("mousedown", () => { websocket.send("GO_FORWARD"); });
+    forward_btn.addEventListener("mouseup",   () => { websocket.send("FORWARD_STOP"); });
+    forward_btn.addEventListener("touchstart",() => { websocket.send("GO_FORWARD"); });
+    forward_btn.addEventListener("touchend",  () => { websocket.send("FORWARD_STOP"); });
+
+    const reverse_btn = document.getElementById("reverse");
+    reverse_btn.addEventListener("mousedown", () => { websocket.send("GO_BACKWARDS"); });
+    reverse_btn.addEventListener("mouseup",   () => { websocket.send("FORWARD_STOP"); });
+    reverse_btn.addEventListener("touchstart",() => { websocket.send("GO_BACKWARDS"); });
+    reverse_btn.addEventListener("touchend",  () => { websocket.send("FORWARD_STOP"); });
+
+    const right_btn = document.getElementById("right");
+    right_btn.addEventListener("mousedown", () => { websocket.send("TURN_RIGHT"); });
+    right_btn.addEventListener("mouseup",   () => { websocket.send("FORWARD_STOP"); });
+    right_btn.addEventListener("touchstart",() => { websocket.send("TURN_RIGHT"); });
+    right_btn.addEventListener("touchend",  () => { websocket.send("FORWARD_STOP"); });
+
+    const left_btn = document.getElementById("left");
+    left_btn.addEventListener("mousedown", () => { websocket.send("TURN_LEFT"); });
+    left_btn.addEventListener("mouseup",   () => { websocket.send("FORWARD_STOP"); });
+    left_btn.addEventListener("touchstart",() => { websocket.send("TURN_LEFT"); });
+    left_btn.addEventListener("touchend",  () => { websocket.send("FORWARD_STOP"); });
+
   }
 </script>
 </body>
